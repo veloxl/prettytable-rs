@@ -46,7 +46,8 @@ fn main() {
     let mut table = table!([Frb => "A", "B", "C"], [1, 2, 3, 4], ["A\nBCCZZZ\nDDD", 2, table]);
     table.set_titles(row!["Title 1", "Title 2"]);
     table.set_format(*consts::FORMAT_DEFAULT);
-    table.set_border_color(yansi::Color::RGB(255, 255, 0));
+    #[cfg(feature = "border_colors")]
+    table.set_border_color(yansi::Color::RGB(0, 255, 0));
     table.get_format().indent(8);
     table.printstd();
     // println!("{:#?}", table);

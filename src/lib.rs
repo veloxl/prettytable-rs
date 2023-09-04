@@ -33,6 +33,7 @@ pub use cell::Cell;
 use format::{consts, LinePosition, TableFormat};
 pub use row::Row;
 use utils::StringWriter;
+#[cfg(feature = "border_colors")]
 use yansi::Color;
 
 /// An owned printable table
@@ -269,6 +270,7 @@ impl Table {
     }
 
     /// Set border separator color
+    #[cfg(feature = "border_colors")]
     pub fn set_border_color(&mut self, color: Color) {
         self.format.border_color(color);
     }

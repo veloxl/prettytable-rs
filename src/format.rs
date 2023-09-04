@@ -3,6 +3,7 @@
 use std::io::{Error, Write};
 
 use encode_unicode::Utf8Char;
+#[cfg(feature = "border_colors")]
 use yansi::{Color, Paint};
 
 use super::utils::NEWLINE;
@@ -70,6 +71,38 @@ impl LineSeparator {
 
     /// Print a full line separator to `out`. `col_width` is a slice containing the width of each column.
     /// Returns the number of printed lines
+    #[cfg(not(feature = "border_colors"))]
+    fn print<T: Write + ?Sized>(
+        &self,
+        out: &mut T,
+        col_width: &[usize],
+        padding: (usize, usize),
+        colsep: bool,
+        lborder: bool,
+        rborder: bool,
+    ) -> Result<usize, Error> {
+        if lborder {
+            out.write_all(Utf8Char::from(self.ljunc).as_bytes())?;
+        }
+        let mut iter = col_width.iter().peekable();
+        while let Some(width) = iter.next() {
+            for _ in 0..width + padding.0 + padding.1 {
+                out.write_all(Utf8Char::from(self.line).as_bytes())?;
+            }
+            if colsep && iter.peek().is_some() {
+                out.write_all(Utf8Char::from(self.junc).as_bytes())?;
+            }
+        }
+        if rborder {
+            out.write_all(Utf8Char::from(self.rjunc).as_bytes())?;
+        }
+        out.write_all(NEWLINE)?;
+        Ok(1)
+    }
+
+    /// Print a full line separator to `out`. `col_width` is a slice containing the width of each column.
+    /// Returns the number of printed lines
+    #[cfg(feature = "border_colors")]
     #[allow(clippy::too_many_arguments)]
     fn print<T: Write + ?Sized>(
         &self,
@@ -81,7 +114,7 @@ impl LineSeparator {
         rborder: bool,
         color: Option<Color>,
     ) -> Result<usize, Error> {
-        let char_bytes = |color: Option<Color>, junc: char| match color {
+        let char_bytes = |junc: char| match color {
             Some(color) => Paint::new(Utf8Char::from(junc))
                 .fg(color)
                 .to_string()
@@ -91,19 +124,19 @@ impl LineSeparator {
         };
 
         if lborder {
-            out.write_all(&char_bytes(color, self.ljunc))?;
+            out.write_all(&char_bytes(self.ljunc))?;
         }
         let mut iter = col_width.iter().peekable();
         while let Some(width) = iter.next() {
             for _ in 0..width + padding.0 + padding.1 {
-                out.write_all(&char_bytes(color, self.line))?;
+                out.write_all(&char_bytes(self.line))?;
             }
             if colsep && iter.peek().is_some() {
-                out.write_all(&char_bytes(color, self.junc))?;
+                out.write_all(&char_bytes(self.junc))?;
             }
         }
         if rborder {
-            out.write_all(&char_bytes(color, self.rjunc))?;
+            out.write_all(&char_bytes(self.rjunc))?;
         }
         out.write_all(NEWLINE)?;
         Ok(1)
@@ -117,6 +150,33 @@ impl Default for LineSeparator {
 }
 
 /// Contains the table formatting rules
+#[cfg(not(feature = "border_colors"))]
+#[derive(Default, Clone, Debug, Copy, Hash, PartialEq, Eq)]
+pub struct TableFormat {
+    /// Optional column separator character
+    csep: Option<char>,
+    /// Optional left border character
+    lborder: Option<char>,
+    /// Optional right border character
+    rborder: Option<char>,
+    /// Optional internal line separator
+    lsep: Option<LineSeparator>,
+    /// Optional title line separator
+    tsep: Option<LineSeparator>,
+    /// Optional top line separator
+    top_sep: Option<LineSeparator>,
+    /// Optional bottom line separator
+    bottom_sep: Option<LineSeparator>,
+    /// Left padding
+    pad_left: usize,
+    /// Right padding
+    pad_right: usize,
+    /// Global indentation when rendering the table
+    indent: usize,
+}
+
+/// Contains the table formatting rules
+#[cfg(feature = "border_colors")]
 #[derive(Default, Clone, Debug, Copy, Hash, PartialEq, Eq)]
 pub struct TableFormat {
     /// Optional column separator character
@@ -221,11 +281,13 @@ impl TableFormat {
     }
 
     /// Get the border separator color
+    #[cfg(feature = "border_colors")]
     pub fn get_border_color(&self) -> Option<Color> {
         self.border_color
     }
 
     /// Set the border separator color
+    #[cfg(feature = "border_colors")]
     pub fn border_color(&mut self, border_color: Color) {
         self.border_color = Some(border_color);
     }
@@ -250,6 +312,7 @@ impl TableFormat {
                     self.csep.is_some(),
                     self.lborder.is_some(),
                     self.rborder.is_some(),
+                    #[cfg(feature = "border_colors")]
                     self.get_border_color(),
                 )
             }
@@ -274,15 +337,19 @@ impl TableFormat {
         out: &mut T,
         pos: ColumnPosition,
     ) -> Result<(), Error> {
+        #[cfg(feature = "border_colors")]
         let char_bytes = |sep: char| match self.border_color {
             Some(color) => Paint::new(Utf8Char::from(sep))
                 .fg(color)
                 .to_string()
-                .as_bytes()
-                .to_vec(),
+                .into_bytes(),
             None => Utf8Char::from(sep).as_bytes().to_vec(),
         };
+
         match self.get_column_separator(pos) {
+            #[cfg(not(feature = "border_colors"))]
+            Some(s) => out.write_all(Utf8Char::from(s).as_bytes()),
+            #[cfg(feature = "border_colors")]
             Some(s) => out.write_all(&char_bytes(s)),
             None => Ok(()),
         }
@@ -351,6 +418,7 @@ impl FormatBuilder {
         self
     }
 
+    #[cfg(feature = "border_colors")]
     /// Set border separator color
     pub fn border_color(mut self, color: Color) -> Self {
         self.format.border_color(color);
