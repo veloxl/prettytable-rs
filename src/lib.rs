@@ -33,6 +33,7 @@ pub use cell::Cell;
 use format::{consts, LinePosition, TableFormat};
 pub use row::Row;
 use utils::StringWriter;
+use yansi::Color;
 
 /// An owned printable table
 #[derive(Default, Clone, Debug, Hash, PartialEq, Eq)]
@@ -265,6 +266,11 @@ impl Table {
     /// Get a mutable reference to the internal format
     pub fn get_format(&mut self) -> &mut TableFormat {
         &mut self.format
+    }
+
+    /// Set border separator color
+    pub fn set_border_color(&mut self, color: Color) {
+        self.format.border_color(color);
     }
 
     /// Compute and return the number of column

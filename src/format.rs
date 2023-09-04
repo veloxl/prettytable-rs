@@ -3,6 +3,7 @@
 use std::io::{Error, Write};
 
 use encode_unicode::Utf8Char;
+use yansi::{Color, Paint};
 
 use super::utils::NEWLINE;
 
@@ -69,6 +70,7 @@ impl LineSeparator {
 
     /// Print a full line separator to `out`. `col_width` is a slice containing the width of each column.
     /// Returns the number of printed lines
+    #[allow(clippy::too_many_arguments)]
     fn print<T: Write + ?Sized>(
         &self,
         out: &mut T,
@@ -77,21 +79,31 @@ impl LineSeparator {
         colsep: bool,
         lborder: bool,
         rborder: bool,
+        color: Option<Color>,
     ) -> Result<usize, Error> {
+        let char_bytes = |color: Option<Color>, junc: char| match color {
+            Some(color) => Paint::new(Utf8Char::from(junc))
+                .fg(color)
+                .to_string()
+                .as_bytes()
+                .to_vec(),
+            None => Utf8Char::from(junc).as_bytes().to_vec(),
+        };
+
         if lborder {
-            out.write_all(Utf8Char::from(self.ljunc).as_bytes())?;
+            out.write_all(&char_bytes(color, self.ljunc))?;
         }
         let mut iter = col_width.iter().peekable();
         while let Some(width) = iter.next() {
             for _ in 0..width + padding.0 + padding.1 {
-                out.write_all(Utf8Char::from(self.line).as_bytes())?;
+                out.write_all(&char_bytes(color, self.line))?;
             }
             if colsep && iter.peek().is_some() {
-                out.write_all(Utf8Char::from(self.junc).as_bytes())?;
+                out.write_all(&char_bytes(color, self.junc))?;
             }
         }
         if rborder {
-            out.write_all(Utf8Char::from(self.rjunc).as_bytes())?;
+            out.write_all(&char_bytes(color, self.rjunc))?;
         }
         out.write_all(NEWLINE)?;
         Ok(1)
@@ -105,7 +117,7 @@ impl Default for LineSeparator {
 }
 
 /// Contains the table formatting rules
-#[derive(Clone, Debug, Copy, Hash, PartialEq, Eq)]
+#[derive(Default, Clone, Debug, Copy, Hash, PartialEq, Eq)]
 pub struct TableFormat {
     /// Optional column separator character
     csep: Option<char>,
@@ -127,23 +139,14 @@ pub struct TableFormat {
     pad_right: usize,
     /// Global indentation when rendering the table
     indent: usize,
+    /// Optional border separatator color
+    border_color: Option<Color>,
 }
 
 impl TableFormat {
     /// Create a new empty TableFormat.
     pub fn new() -> TableFormat {
-        TableFormat {
-            csep: None,
-            lborder: None,
-            rborder: None,
-            lsep: None,
-            tsep: None,
-            top_sep: None,
-            bottom_sep: None,
-            pad_left: 0,
-            pad_right: 0,
-            indent: 0,
-        }
+        TableFormat::default()
     }
 
     /// Return a tuple with left and right padding
@@ -217,6 +220,16 @@ impl TableFormat {
         self.indent
     }
 
+    /// Get the border separator color
+    pub fn get_border_color(&self) -> Option<Color> {
+        self.border_color
+    }
+
+    /// Set the border separator color
+    pub fn border_color(&mut self, border_color: Color) {
+        self.border_color = Some(border_color);
+    }
+
     /// Print a full line separator to `out`. `col_width` is a slice containing the width of each column.
     /// Returns the number of printed lines
     // #[deprecated(since="0.8.0", note="Will become private in future release. See [issue #87](https://github.com/phsym/prettytable-rs/issues/87)")]
@@ -237,6 +250,7 @@ impl TableFormat {
                     self.csep.is_some(),
                     self.lborder.is_some(),
                     self.rborder.is_some(),
+                    self.get_border_color(),
                 )
             }
             None => Ok(0),
@@ -260,16 +274,18 @@ impl TableFormat {
         out: &mut T,
         pos: ColumnPosition,
     ) -> Result<(), Error> {
+        let char_bytes = |sep: char| match self.border_color {
+            Some(color) => Paint::new(Utf8Char::from(sep))
+                .fg(color)
+                .to_string()
+                .as_bytes()
+                .to_vec(),
+            None => Utf8Char::from(sep).as_bytes().to_vec(),
+        };
         match self.get_column_separator(pos) {
-            Some(s) => out.write_all(Utf8Char::from(s).as_bytes()),
+            Some(s) => out.write_all(&char_bytes(s)),
             None => Ok(()),
         }
-    }
-}
-
-impl Default for TableFormat {
-    fn default() -> Self {
-        TableFormat::new()
     }
 }
 
@@ -332,6 +348,12 @@ impl FormatBuilder {
     /// Set global indentation in spaces used when rendering a table
     pub fn indent(mut self, spaces: usize) -> Self {
         self.format.indent(spaces);
+        self
+    }
+
+    /// Set border separator color
+    pub fn border_color(mut self, color: Color) -> Self {
+        self.format.border_color(color);
         self
     }
 
